@@ -1,9 +1,5 @@
 # TraceHarbor
 
-[![CI](https://github.com/KDDMR/traceharbor/actions/workflows/ci.yml/badge.svg)](https://github.com/KDDMR/traceharbor/actions/workflows/ci.yml)
-[![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-7af0ba.svg)](LICENSE)
-
 **A production-minded error and performance monitoring demo built for developer-tooling exploration.**
 
 TraceHarbor follows telemetry from application code to an issue dashboard: a zero-dependency Python SDK captures errors and transactions, a concurrent ingest service validates and filters untrusted payloads, and a SQLite-backed pipeline groups recurring failures into actionable issues.
@@ -132,3 +128,4 @@ docs/                 architecture, ADR and portfolio write-up
 ## License
 
 MIT © 2026 Kadir Demir
+
