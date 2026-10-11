@@ -1,0 +1,15 @@
+services:
+  traceharbor:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      TRACEHARBOR_API_KEY: ${TRACEHARBOR_API_KEY:-dev-key}
+      TRACEHARBOR_RATE_LIMIT: 120
+    volumes:
+      - traceharbor-data:/data
+    restart: unless-stopped
+
+volumes:
+  traceharbor-data:
+
