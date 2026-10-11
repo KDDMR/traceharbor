@@ -1,26 +1,15 @@
-# Publish this repository to GitHub
+# Application links
 
-The repository is ready to publish after replacing `YOUR-GITHUB-USERNAME` in `README.md`.
+TraceHarbor is published as a public portfolio project:
 
-## GitHub web interface
+- Repository: https://github.com/KDDMR/traceharbor
+- Technical write-up: https://github.com/KDDMR/traceharbor/blob/main/docs/portfolio-writeup.md
+- Architecture notes: https://github.com/KDDMR/traceharbor/blob/main/docs/architecture.md
+- Design decision: https://github.com/KDDMR/traceharbor/blob/main/docs/decisions/001-server-side-grouping.md
+- Continuous integration: https://github.com/KDDMR/traceharbor/actions
 
-1. Create an empty **public** repository named `traceharbor` without a generated README, license or `.gitignore`.
-2. In this local repository, run:
+## What reviewers can inspect
 
-```bash
-git remote add origin https://github.com/YOUR-GITHUB-USERNAME/traceharbor.git
-git push -u origin main
-```
+The repository demonstrates an end-to-end telemetry system: a zero-dependency Python SDK, authenticated ingest API, privacy filtering, deterministic issue grouping, transactional SQLite persistence, a browser dashboard, automated tests and container delivery.
 
-3. Add the short description: `A production-minded telemetry ingest service and zero-dependency Python SDK.`
-4. Add topics: `python`, `observability`, `telemetry`, `error-monitoring`, `developer-tools`.
-5. Enable Issues and the repository's private vulnerability reporting.
-
-Use the public repository URL for the application field. The portfolio write-up can be linked directly as:
-
-```text
-https://github.com/YOUR-GITHUB-USERNAME/traceharbor/blob/main/docs/portfolio-writeup.md
-```
-
-Before submitting, verify that GitHub Actions is green and that no generated database files are tracked.
-
+Before sharing the repository in an application, confirm that the latest GitHub Actions run is green and that no generated database files are tracked.
