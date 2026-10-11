@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="TraceHarbor demo observability dashboard" />
+    <title>TraceHarbor · Issue Stream</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="TraceHarbor home">
+        <span class="brand-mark" aria-hidden="true">TH</span>
+        <span>TraceHarbor</span>
+      </a>
+      <div class="status"><span class="status-dot"></span> Ingest operational</div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div>
+          <p class="eyebrow">DEVELOPER OBSERVABILITY</p>
+          <h1>Issues, without the noise.</h1>
+          <p class="subtitle">A production-minded telemetry demo with a Python SDK, deterministic grouping and privacy-first ingest.</p>
+        </div>
+        <div class="controls">
+          <label for="project">Project</label>
+          <input id="project" value="demo-store" autocomplete="off" />
+          <button id="refresh">Refresh</button>
+        </div>
+      </section>
+
+      <section class="metrics" aria-label="Project metrics">
+        <article><span>Events</span><strong id="event-count">—</strong></article>
+        <article><span>Issues</span><strong id="issue-count">—</strong></article>
+        <article><span>Errors</span><strong id="error-count">—</strong></article>
+        <article><span>Avg. transaction</span><strong id="duration">—</strong></article>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <p class="eyebrow">LATEST</p>
+            <h2>Issue stream</h2>
+          </div>
+          <span id="updated" class="muted">Not loaded</span>
+        </div>
+        <div id="empty" class="empty" hidden>
+          <strong>No issues yet</strong>
+          <span>Run <code>python -m examples.demo_app</code> to send sample telemetry.</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Issue</th><th>Level</th><th>Events</th><th>Last seen</th></tr>
+            </thead>
+            <tbody id="issues"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <dialog id="detail-dialog">
+      <div class="dialog-header"><h2>Issue detail</h2><button id="close-dialog" aria-label="Close">×</button></div>
+      <pre id="detail"></pre>
+    </dialog>
+    <script src="/app.js" defer></script>
+  </body>
+</html>
