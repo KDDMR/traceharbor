@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import re
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
-
 
 ALLOWED_TYPES = {"error", "message", "transaction"}
 ALLOWED_LEVELS = {"debug", "info", "warning", "error", "fatal"}
@@ -19,7 +18,7 @@ class ValidationError(ValueError):
 
 def _iso_timestamp(value: Any) -> str:
     if value is None:
-        return datetime.now(timezone.utc).isoformat()
+        return datetime.now(UTC).isoformat()
     if not isinstance(value, str):
         raise ValidationError("timestamp must be an ISO-8601 string")
     try:
@@ -27,8 +26,8 @@ def _iso_timestamp(value: Any) -> str:
     except ValueError as exc:
         raise ValidationError("timestamp must be a valid ISO-8601 string") from exc
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc).isoformat()
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC).isoformat()
 
 
 def _event_id(value: Any) -> str:

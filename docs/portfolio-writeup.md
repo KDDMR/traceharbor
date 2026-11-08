@@ -1,27 +1,33 @@
-# Building TraceHarbor: reliable telemetry on both sides of the wire
+# Building TraceHarbor: reliable telemetry and CI artifact processing
 
-I built TraceHarbor to explore a developer-tools problem end to end: how an application can report failures without making its own reliability depend on the monitoring system.
+I built TraceHarbor to explore developer tooling end to end: how an application can report failures without depending on the monitoring system, and how a CI service can accept a screenshot build, process it asynchronously and return a useful comparison to an engineer.
 
-The project contains a Python SDK, an ingest pipeline, issue grouping, persistence and a small dashboard. The feature set is intentionally limited. I focused instead on the design questions that become important once telemetry leaves a demo script:
+The project combines a Python telemetry SDK, an ingest pipeline, issue grouping, durable analysis jobs, content-addressed artifact storage, pixel-level snapshot comparison and a small dashboard. I kept it runnable on one machine so that the complete state transition remains visible in code and tests.
 
-- How does capture stay off the request path?
-- What happens when ingest is unavailable?
-- How are retries made idempotent?
-- Which dynamic errors should become the same issue?
-- Where should credentials and identifiers be removed?
-- How can failure behavior be tested deterministically?
+The questions I focused on were:
+
+- How does telemetry capture stay off the host application's request path?
+- How can a large request body be stored without buffering it fully in memory?
+- What should happen when CI delivers the same build more than once?
+- How does a worker recover after losing ownership of a running job?
+- Which failures deserve a retry, and which inputs should fail permanently?
+- How can ZIP and image processing be bounded before expensive work begins?
+- How can limitations be documented without claiming untested production scale?
 
 ## Decisions I made
 
-The SDK places events in a bounded queue and sends batches from a background worker. Delivery uses bounded exponential backoff with jitter. When the retry budget is exhausted, the SDK counts the dropped events and keeps the host application running.
+The SDK places events in a bounded queue and sends batches from a background worker. Delivery uses bounded exponential backoff with jitter. Event IDs make repeated delivery idempotent, while deterministic server-side fingerprints group recurring failures.
 
-On the server, the entire envelope is prepared before the first write. This prevents a malformed later item from producing an accidental partial result. Common credential keys and email values are filtered before persistence. Event IDs are unique and inserts are idempotent, so a client can retry without increasing the issue count twice.
+The artifact API streams a declared content length to temporary storage in 1 MiB chunks while calculating SHA-256. It fsyncs the file and moves it atomically into a content-addressed object directory. A project-scoped idempotency key maps retries to the original build and job.
 
-Issue grouping is server-owned. A fingerprint uses the exception type and top application frame while excluding dynamic values and line numbers. That choice is simple and explainable, and the included architecture notes describe where it would need to evolve for source maps, multiple SDK languages and distributed ingest.
+Analysis jobs are persisted before the request returns. Workers claim jobs atomically, attach expiring leases and increment the attempt counter. A lost worker can therefore be replaced after the lease expires. Transient failures requeue with bounded exponential backoff, while malformed archives and unsafe paths fail immediately.
 
-## What I would build next
+The snapshot analyzer checks entry counts, aggregate uncompressed size, duplicate names and traversal paths before decoding PNG files. Unchanged hashes bypass pixel work. Changed images are decoded to RGBA and compared pixel by pixel; the result distinguishes added, changed, removed and unchanged files.
 
-My next step would be a durable boundary between intake and processing. Stateless ingest nodes would authenticate, validate and append envelopes to a log. Consumers could then normalize stacks, symbolicate frames, group issues and write to stores chosen for their access patterns. I would also add a disk-backed SDK spool, scoped project keys, source map support and property-based tests for event normalization.
+## Boundaries and next steps
 
-TraceHarbor is not presented as a replacement for a production observability platform. It is a compact engineering exercise that makes reliability, privacy and scaling trade-offs visible in code and tests.
+This repository demonstrates the state machine and failure behavior, not a claim of multi-GB production throughput. SQLite, a local content-addressed store and thread workers are appropriate for a reproducible single-node demo. The default upload limit is intentionally 50 MB.
 
+For production, I would preserve the domain states while moving uploads to S3-compatible multipart storage, job delivery to Kafka or a managed queue, metadata to PostgreSQL and image work to independently scaled workers. I would benchmark memory and throughput with realistic archives before selecting concurrency and partitioning strategies. A GitHub App could then translate pull-request webhooks into idempotent builds and publish the completed result through the Checks API.
+
+TraceHarbor is intentionally not presented as a replacement for Sentry. It is a compact engineering exercise that makes reliability, security, retries and scaling trade-offs inspectable.

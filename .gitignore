@@ -3,6 +3,7 @@ __pycache__/
 *.db
 *.db-shm
 *.db-wal
+traceharbor-artifacts/
 .coverage
 .pytest_cache/
 .ruff_cache/

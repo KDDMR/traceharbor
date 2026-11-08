@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-from contextlib import AbstractContextManager
-from datetime import datetime, timezone
 import queue
 import random
-from threading import Event, Lock, Thread
 import time
 import traceback
+from collections.abc import Callable
+from contextlib import AbstractContextManager, suppress
+from datetime import UTC, datetime
+from threading import Event, Lock, Thread
 from types import TracebackType
-from typing import Any, Callable, Protocol
+from typing import Any, Literal, Protocol
 from uuid import uuid4
 
 from .transport import HttpTransport
@@ -21,7 +22,7 @@ class Transport(Protocol):
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 class Client:
@@ -103,7 +104,7 @@ class Client:
         *,
         tags: dict[str, str] | None = None,
         context: dict[str, Any] | None = None,
-    ) -> "Transaction":
+    ) -> Transaction:
         return Transaction(self, name, tags=tags, context=context)
 
     def flush(self) -> None:
@@ -159,10 +160,8 @@ class Client:
             except Exception:
                 # Telemetry must never crash the host application. Delivery is best effort.
                 continue
-        try:
+        with suppress(Exception):
             self.flush()
-        except Exception:
-            pass
 
     def _drain(self, limit: int) -> list[dict[str, Any]]:
         events: list[dict[str, Any]] = []
@@ -201,7 +200,7 @@ class Transaction(AbstractContextManager["Transaction"]):
         self.context = context
         self.started_at = 0.0
 
-    def __enter__(self) -> "Transaction":
+    def __enter__(self) -> Transaction:
         self.started_at = time.perf_counter()
         return self
 
@@ -210,7 +209,7 @@ class Transaction(AbstractContextManager["Transaction"]):
         exc_type: type[BaseException] | None,
         exc: BaseException | None,
         tb: TracebackType | None,
-    ) -> bool:
+    ) -> Literal[False]:
         duration_ms = (time.perf_counter() - self.started_at) * 1_000
         status = "error" if exc is not None else "ok"
         event = self.client._base_event("transaction", "info", self.tags, self.context)

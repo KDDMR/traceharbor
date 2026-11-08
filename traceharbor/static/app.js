@@ -1,9 +1,12 @@
 const projectInput = document.querySelector("#project");
 const refreshButton = document.querySelector("#refresh");
 const issuesBody = document.querySelector("#issues");
+const buildsBody = document.querySelector("#builds");
 const empty = document.querySelector("#empty");
+const buildEmpty = document.querySelector("#build-empty");
 const dialog = document.querySelector("#detail-dialog");
 const detail = document.querySelector("#detail");
+const detailTitle = document.querySelector("#detail-title");
 
 function project() {
   return projectInput.value.trim() || "demo-store";
@@ -24,6 +27,14 @@ async function request(path) {
 
 async function openIssue(fingerprint) {
   const item = await request(`/api/issues/${fingerprint}?project=${encodeURIComponent(project())}`);
+  detailTitle.textContent = "Issue detail";
+  detail.textContent = JSON.stringify(item, null, 2);
+  dialog.showModal();
+}
+
+async function openBuild(buildId) {
+  const item = await request(`/api/builds/${buildId}`);
+  detailTitle.textContent = "Snapshot build";
   detail.textContent = JSON.stringify(item, null, 2);
   dialog.showModal();
 }
@@ -54,15 +65,43 @@ function renderIssues(items) {
   }
 }
 
+function renderBuilds(items) {
+  buildsBody.replaceChildren();
+  buildEmpty.hidden = items.length !== 0;
+  for (const item of items) {
+    const row = document.createElement("tr");
+    row.tabIndex = 0;
+    row.innerHTML = `
+      <td><strong></strong><span class="fingerprint"></span></td>
+      <td><span class="badge"></span></td>
+      <td class="mono"></td>
+      <td class="mono"></td>`;
+    row.querySelector("strong").textContent = item.sha256.slice(0, 12);
+    row.querySelector(".fingerprint").textContent = formatTime(item.created_at);
+    const badge = row.querySelector(".badge");
+    badge.textContent = item.status;
+    badge.dataset.status = item.status;
+    row.children[2].textContent = item.summary?.snapshot_count ?? "—";
+    row.children[3].textContent = item.summary?.changed ?? "—";
+    row.addEventListener("click", () => openBuild(item.build_id));
+    row.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") openBuild(item.build_id);
+    });
+    buildsBody.append(row);
+  }
+}
+
 async function loadDashboard() {
   refreshButton.disabled = true;
   try {
     const encoded = encodeURIComponent(project());
-    const [issues, metrics] = await Promise.all([
+    const [issues, metrics, builds] = await Promise.all([
       request(`/api/issues?project=${encoded}`),
       request(`/api/metrics?project=${encoded}`),
+      request(`/api/builds?project=${encoded}`),
     ]);
     renderIssues(issues.items);
+    renderBuilds(builds.items);
     document.querySelector("#event-count").textContent = metrics.event_count;
     document.querySelector("#issue-count").textContent = metrics.issue_count;
     document.querySelector("#error-count").textContent = metrics.error_count;

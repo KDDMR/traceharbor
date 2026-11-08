@@ -6,6 +6,10 @@ This repository is an educational observability prototype, not a hosted service.
 
 - API-key authentication for ingest routes
 - Request-size and envelope-size limits
+- Compressed-size, uncompressed-size and snapshot-count limits for ZIP artifacts
+- ZIP path-traversal and duplicate-path rejection before image processing
+- Content-addressed artifact keys; API callers never choose filesystem paths
+- Project-scoped idempotency keys and lease ownership checks for worker commits
 - Per-key token-bucket rate limiting
 - Recursive filtering of common credential fields and email addresses
 - Parameterized SQL statements and UUID-based event identifiers

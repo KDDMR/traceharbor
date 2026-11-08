@@ -68,9 +68,8 @@ class SDKTests(unittest.TestCase):
     def test_transaction_does_not_swallow_exception(self) -> None:
         transport = RecordingTransport()
         client = self.client(transport)
-        with self.assertRaises(ValueError):
-            with client.transaction("checkout"):
-                raise ValueError("broken")
+        with self.assertRaises(ValueError), client.transaction("checkout"):
+            raise ValueError("broken")
         client.flush()
         event_types = [event["type"] for batch in transport.batches for event in batch]
         self.assertEqual(event_types, ["transaction", "error"])

@@ -2,32 +2,46 @@
 
 from __future__ import annotations
 
-from http import HTTPStatus
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import logging
-from pathlib import Path
 import re
-from typing import Any
+from http import HTTPStatus
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from typing import Any, BinaryIO, cast
 from urllib.parse import parse_qs, urlparse
 from uuid import uuid4
 
+from .artifact_repository import ArtifactRepository
+from .artifact_service import ArtifactService
+from .artifact_store import ArtifactStorageError, ArtifactTooLargeError, LocalArtifactStore
 from .config import Settings
 from .models import ValidationError
 from .service import RateLimitError, TelemetryService, UnauthorizedError
 
-
 LOGGER = logging.getLogger("traceharbor.http")
 STATIC_ROOT = Path(__file__).with_name("static")
 ISSUE_PATH = re.compile(r"^/api/issues/([a-f0-9]{24})$")
+JOB_PATH = re.compile(r"^/api/jobs/([0-9a-f-]{36})$")
+BUILD_PATH = re.compile(r"^/api/builds/([0-9a-f-]{36})$")
+BUILD_DIFF_PATH = re.compile(r"^/api/builds/([0-9a-f-]{36})/diffs$")
 
 
 class TraceHarborHTTPServer(ThreadingHTTPServer):
     daemon_threads = True
 
-    def __init__(self, address: tuple[str, int], service: TelemetryService, settings: Settings) -> None:
+    def __init__(
+        self,
+        address: tuple[str, int],
+        service: TelemetryService,
+        artifact_service: ArtifactService,
+        artifact_repository: ArtifactRepository,
+        settings: Settings,
+    ) -> None:
         super().__init__(address, TraceHarborHandler)
         self.service = service
+        self.artifact_service = artifact_service
+        self.artifact_repository = artifact_repository
         self.settings = settings
 
 
@@ -35,7 +49,7 @@ class TraceHarborHandler(BaseHTTPRequestHandler):
     server: TraceHarborHTTPServer
     protocol_version = "HTTP/1.1"
 
-    def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler interface
+    def do_GET(self) -> None:
         request_id = str(uuid4())
         parsed = urlparse(self.path)
         try:
@@ -53,6 +67,38 @@ class TraceHarborHandler(BaseHTTPRequestHandler):
             elif parsed.path == "/api/metrics":
                 project = parse_qs(parsed.query).get("project", ["demo-store"])[0]
                 self._json(HTTPStatus.OK, self.server.service.store.metrics(project), request_id)
+            elif parsed.path == "/api/builds":
+                query = parse_qs(parsed.query)
+                project = query.get("project", ["demo-store"])[0]
+                limit = int(query.get("limit", ["30"])[0])
+                self._json(
+                    HTTPStatus.OK,
+                    {"items": self.server.artifact_repository.list_builds(project, limit)},
+                    request_id,
+                )
+            elif match := BUILD_DIFF_PATH.match(parsed.path):
+                build = self.server.artifact_repository.get_build(match.group(1))
+                if build is None:
+                    self._json(HTTPStatus.NOT_FOUND, {"error": "build not found"}, request_id)
+                else:
+                    self._json(
+                        HTTPStatus.OK,
+                        {"items": self.server.artifact_repository.list_diffs(match.group(1))},
+                        request_id,
+                    )
+            elif match := BUILD_PATH.match(parsed.path):
+                build = self.server.artifact_repository.get_build(match.group(1))
+                if build is None:
+                    self._json(HTTPStatus.NOT_FOUND, {"error": "build not found"}, request_id)
+                else:
+                    build["diffs"] = self.server.artifact_repository.list_diffs(match.group(1))
+                    self._json(HTTPStatus.OK, build, request_id)
+            elif match := JOB_PATH.match(parsed.path):
+                job = self.server.artifact_repository.get_job(match.group(1))
+                if job is None:
+                    self._json(HTTPStatus.NOT_FOUND, {"error": "job not found"}, request_id)
+                else:
+                    self._json(HTTPStatus.OK, job, request_id)
             elif match := ISSUE_PATH.match(parsed.path):
                 project = parse_qs(parsed.query).get("project", ["demo-store"])[0]
                 issue = self.server.service.store.get_issue(project, match.group(1))
@@ -74,9 +120,12 @@ class TraceHarborHandler(BaseHTTPRequestHandler):
             LOGGER.exception("request_failed", extra={"request_id": request_id})
             self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "internal error"}, request_id)
 
-    def do_POST(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler interface
+    def do_POST(self) -> None:
         request_id = str(uuid4())
         parsed = urlparse(self.path)
+        if parsed.path == "/api/artifacts/snapshots":
+            self._submit_snapshot_artifact(parsed, request_id)
+            return
         if parsed.path not in {"/api/events", "/api/envelope"}:
             self._json(HTTPStatus.NOT_FOUND, {"error": "route not found"}, request_id)
             return
@@ -114,14 +163,58 @@ class TraceHarborHandler(BaseHTTPRequestHandler):
             LOGGER.exception("ingest_failed", extra={"request_id": request_id})
             self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "internal error"}, request_id)
 
+    def _submit_snapshot_artifact(self, parsed: Any, request_id: str) -> None:
+        try:
+            if self.headers.get_content_type() != "application/zip":
+                raise ValidationError("Content-Type must be application/zip")
+            query = parse_qs(parsed.query)
+            project = query.get("project", ["demo-store"])[0]
+            idempotency_key = self.headers.get("X-Idempotency-Key", "")
+            baseline_build_id = self.headers.get("X-Baseline-Build-Id")
+            result = self.server.artifact_service.submit_snapshots(
+                project=project,
+                idempotency_key=idempotency_key,
+                baseline_build_id=baseline_build_id,
+                content_length=self._content_length(),
+                stream=cast(BinaryIO, self.rfile),
+                provided_api_key=self.headers.get("X-API-Key"),
+            )
+            self._json(
+                HTTPStatus.ACCEPTED,
+                {
+                    "build_id": result.build_id,
+                    "job_id": result.job_id,
+                    "status": result.status,
+                    "replayed": result.replayed,
+                    "sha256": result.sha256,
+                    "size_bytes": result.size_bytes,
+                },
+                request_id,
+            )
+        except UnauthorizedError as exc:
+            self._json(HTTPStatus.UNAUTHORIZED, {"error": str(exc)}, request_id)
+        except ArtifactTooLargeError as exc:
+            self._json(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, {"error": str(exc)}, request_id)
+        except (ArtifactStorageError, ValidationError, ValueError) as exc:
+            self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)}, request_id)
+        except Exception:
+            LOGGER.exception("artifact_submission_failed", extra={"request_id": request_id})
+            self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "internal error"}, request_id)
+
     def _read_json(self) -> Any:
+        length = self._content_length()
+        if length <= 0 or length > self.server.settings.max_payload_bytes:
+            raise ValidationError("request body has an invalid size")
+        return json.loads(self.rfile.read(length).decode("utf-8"))
+
+    def _content_length(self) -> int:
         raw_length = self.headers.get("Content-Length")
         if raw_length is None:
             raise ValidationError("Content-Length is required")
         length = int(raw_length)
-        if length <= 0 or length > self.server.settings.max_payload_bytes:
+        if length <= 0:
             raise ValidationError("request body has an invalid size")
-        return json.loads(self.rfile.read(length).decode("utf-8"))
+        return length
 
     def _json(
         self,
@@ -155,5 +248,20 @@ class TraceHarborHandler(BaseHTTPRequestHandler):
         LOGGER.info("http_request method=%s path=%s status=%s", self.command, self.path, args[1])
 
 
-def create_http_server(service: TelemetryService, settings: Settings) -> TraceHarborHTTPServer:
-    return TraceHarborHTTPServer((settings.host, settings.port), service, settings)
+def create_http_server(
+    service: TelemetryService,
+    settings: Settings,
+    artifact_service: ArtifactService | None = None,
+    artifact_repository: ArtifactRepository | None = None,
+) -> TraceHarborHTTPServer:
+    repository = artifact_repository or ArtifactRepository(settings.database_path)
+    artifacts = artifact_service or ArtifactService(
+        repository,
+        LocalArtifactStore(settings.artifact_directory),
+        settings.api_key,
+        max_artifact_bytes=settings.max_artifact_bytes,
+        max_attempts=settings.artifact_job_max_attempts,
+    )
+    return TraceHarborHTTPServer(
+        (settings.host, settings.port), service, artifacts, repository, settings
+    )

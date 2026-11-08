@@ -21,7 +21,7 @@
         <div>
           <p class="eyebrow">DEVELOPER OBSERVABILITY</p>
           <h1>Issues, without the noise.</h1>
-          <p class="subtitle">A production-minded telemetry demo with a Python SDK, deterministic grouping and privacy-first ingest.</p>
+          <p class="subtitle">A production-minded telemetry and snapshot-analysis demo with streaming uploads, durable workers and failure-aware processing.</p>
         </div>
         <div class="controls">
           <label for="project">Project</label>
@@ -58,10 +58,32 @@
           </table>
         </div>
       </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <p class="eyebrow">CI ARTIFACTS</p>
+            <h2>Snapshot builds</h2>
+          </div>
+          <span class="muted">Durable queue · pixel diff</span>
+        </div>
+        <div id="build-empty" class="empty" hidden>
+          <strong>No snapshot builds yet</strong>
+          <span>Run <code>python -m examples.snapshot_demo</code> to submit two builds.</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Build</th><th>Status</th><th>Snapshots</th><th>Changes</th></tr>
+            </thead>
+            <tbody id="builds"></tbody>
+          </table>
+        </div>
+      </section>
     </main>
 
     <dialog id="detail-dialog">
-      <div class="dialog-header"><h2>Issue detail</h2><button id="close-dialog" aria-label="Close">×</button></div>
+      <div class="dialog-header"><h2 id="detail-title">Detail</h2><button id="close-dialog" aria-label="Close">×</button></div>
       <pre id="detail"></pre>
     </dialog>
     <script src="/app.js" defer></script>
