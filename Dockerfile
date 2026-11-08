@@ -4,13 +4,18 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     TRACEHARBOR_HOST=0.0.0.0 \
     TRACEHARBOR_PORT=8080 \
-    TRACEHARBOR_DB=/data/traceharbor.db
+    TRACEHARBOR_DB=/data/traceharbor.db \
+    TRACEHARBOR_ARTIFACT_DIR=/data/artifacts
 
 WORKDIR /app
-RUN useradd --create-home --uid 10001 traceharbor && mkdir /data && chown traceharbor:traceharbor /data
+RUN useradd --create-home --uid 10001 traceharbor \
+    && mkdir -p /data/artifacts \
+    && chown -R traceharbor:traceharbor /data
 
+COPY pyproject.toml README.md ./
 COPY --chown=traceharbor:traceharbor traceharbor ./traceharbor
 COPY --chown=traceharbor:traceharbor traceharbor_sdk ./traceharbor_sdk
+RUN pip install --no-cache-dir .
 
 USER traceharbor
 EXPOSE 8080

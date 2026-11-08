@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import hmac
+from dataclasses import dataclass
 from typing import Any
 
 from .processing import prepare_event

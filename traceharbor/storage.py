@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from contextlib import contextmanager
 import json
-from pathlib import Path
 import sqlite3
+from collections.abc import Iterator
+from contextlib import contextmanager
+from pathlib import Path
 from threading import Lock
-from typing import Any, Iterator
-
+from typing import Any
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS events (

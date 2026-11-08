@@ -9,7 +9,6 @@ from typing import Any
 
 from .models import validate_event
 
-
 SENSITIVE_KEYS = {
     "authorization",
     "cookie",
